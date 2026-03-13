@@ -71,18 +71,21 @@ Backend default: `http://localhost:8000`
 
 ## Deployment (Recommended)
 
-Use Vercel for the frontend and Render (or Railway) for the FastAPI backend.
+Use Vercel for the frontend and Railway for the FastAPI backend.
 
-### 1) Deploy Backend (Render)
+### 1) Deploy Backend (Railway)
 
-- Create a new Web Service from this repository.
-- Root directory: `backend`
-- Build command: `pip install -r requirements.txt`
-- Start command: `uvicorn main:app --host 0.0.0.0 --port $PORT`
-- Add environment variables from `backend/.env.example`.
-
-After deployment, copy your backend URL, for example:
-`https://your-backend.onrender.com`
+- Go to [railway.app](https://railway.app) → New Project → Deploy from GitHub repo.
+- Select this repository.
+- Railway will detect `railway.toml` and configure automatically.
+- Add environment variables (from `backend/.env.example`):
+  - `MONGODB_URI` — your MongoDB Atlas connection string
+  - `SECRET_KEY` — a long random secret
+  - `DB_NAME` — propai
+  - `CORS_ORIGINS` — your Vercel frontend URL (add after Vercel deploy)
+  - `PERFORMANCE_WINDOW_SIZE` — 500
+- Click Deploy. Copy your Railway URL, for example:
+  `https://your-project.up.railway.app`
 
 ### 2) Deploy Frontend (Vercel)
 
