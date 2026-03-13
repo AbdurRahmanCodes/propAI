@@ -43,7 +43,12 @@ _X_scaled = _scaler.transform(_df_features.values)
 
 # Load pre-computed similarity matrix for property-to-property lookups
 print("[Recommender] Loading similarity matrix...")
-_sim_matrix = np.load(MODELS_DIR / "similarity_matrix.npy")
+_sim_path = MODELS_DIR / "similarity_matrix.npy"
+if _sim_path.exists():
+    _sim_matrix = np.load(_sim_path)
+else:
+    print("[Recommender] similarity_matrix.npy not found, computing matrix at startup...")
+    _sim_matrix = cosine_similarity(_X_scaled, _X_scaled)
 print("[Recommender] All resources loaded successfully.")
 
 
