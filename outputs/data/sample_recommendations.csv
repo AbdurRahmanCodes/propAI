@@ -1,0 +1,6 @@
+,address,subdistrict_code,rent,deposit,let_type,furnish_type,coucil_tax,property_type,bedrooms,bathrooms,size,avg_distance_to_nearest_station,nearest_station_count
+3184,"Queen's Gate, London, SW7",SW7,3467,4000,Long term,Ask agent,Ask agent,Apartment,2.0,2.0,578.0,0.4,3
+3190,"Kensington High Street, Kensington, London, W8",,3467,4000,Long term,Furnished,Ask agent,Flat,2.0,2.0,578.0,0.4,3
+3171,"Holland Park Gardens, London, W14",W14,3445,0,Long term,Ask agent,Ask agent,Apartment,2.0,2.0,578.0,0.4,3
+3210,"5 Queensberry Place, London",,3553,4100,Long term,Furnished,Ask agent,Flat,2.0,2.0,578.0,0.4,3
+851,"Ebury Apartments, Ebury Place, Pimlico SW1",,3467,0,Long term,Furnished,Ask agent,Apartment,2.0,2.0,578.0,0.5,3

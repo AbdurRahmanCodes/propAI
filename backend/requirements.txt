@@ -1,0 +1,13 @@
+fastapi
+uvicorn[standard]
+pandas
+numpy
+scikit-learn
+joblib
+python-jose[cryptography]
+passlib[bcrypt]
+bcrypt<4.0
+python-multipart
+motor
+pymongo[srv]
+python-dotenv
