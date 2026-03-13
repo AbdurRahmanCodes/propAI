@@ -19,6 +19,7 @@ Endpoints:
 from fastapi import FastAPI, Depends, HTTPException, Query, Path
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 from pathlib import Path as FilePath
 from collections import deque
@@ -48,6 +49,7 @@ BASE_DIR = FilePath(__file__).parent.parent
 FIGURES_DIR = BASE_DIR / "outputs" / "figures"
 DATA_DIR = BASE_DIR / "outputs" / "data"
 METRICS_DIR = BASE_DIR / "outputs" / "metrics"
+FRONTEND_DIST_DIR = BASE_DIR / "frontend" / "dist"
 CORS_ORIGINS = [
     origin.strip() for origin in os.getenv(
         "CORS_ORIGINS",
@@ -566,3 +568,22 @@ async def health():
         "mongodb": db._mongo_available,
         "storage_mode": db.get_storage_mode(),
     }
+
+
+if FRONTEND_DIST_DIR.exists():
+    assets_dir = FRONTEND_DIST_DIR / "assets"
+    if assets_dir.exists():
+        app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="frontend-assets")
+
+    @app.get("/", include_in_schema=False)
+    async def serve_spa_root():
+        return FileResponse(str(FRONTEND_DIST_DIR / "index.html"))
+
+    @app.get("/{path:path}", include_in_schema=False)
+    async def serve_spa(path: str):
+        if path.startswith(("docs", "redoc", "openapi.json")):
+            raise HTTPException(status_code=404, detail="Not found")
+        file_path = FRONTEND_DIST_DIR / path
+        if file_path.exists() and file_path.is_file():
+            return FileResponse(str(file_path))
+        return FileResponse(str(FRONTEND_DIST_DIR / "index.html"))

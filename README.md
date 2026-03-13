@@ -104,6 +104,39 @@ The frontend will call the backend using `VITE_API_BASE_URL` in `frontend/src/se
 - Open Compare and Admin Dashboard pages.
 - Confirm there are no CORS errors.
 
+## Hugging Face Space (Professor Demo)
+
+If you want a single demo link quickly, deploy to a Docker Space.
+
+### 1) Create Space
+
+- Go to Hugging Face Spaces and create a new Space.
+- Choose SDK: `Docker`.
+- Create an empty Space repo.
+
+### 2) Push This Code to the Space
+
+Use git on your machine:
+
+```bash
+git remote add hf https://huggingface.co/spaces/<your-username>/<your-space-name>
+git push hf main
+```
+
+### 3) Set Space Variables (Settings -> Variables)
+
+- `MONGODB_URI`
+- `SECRET_KEY`
+- `DB_NAME` (example: `propai`)
+- `PERFORMANCE_WINDOW_SIZE` (example: `500`)
+
+`CORS_ORIGINS` is optional for HF because frontend and backend are served from the same origin in this Docker setup.
+
+### 4) Done
+
+- Space auto-builds from `Dockerfile`.
+- App runs on port `7860` and serves both UI and API from one link.
+
 ## Thesis
 
 Main dissertation file:
