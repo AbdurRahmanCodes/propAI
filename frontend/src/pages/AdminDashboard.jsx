@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { getDashboardStats, getFigureUrl, getPerformanceSummary, getUsabilitySummary } from '../services/api'
+import { getDashboardStats, getFigureUrl, getPerformanceSummary, getPropertyTypes, getUsabilitySummary } from '../services/api'
 
 const fmt = (n, decimals = 0) => n != null ? Number(n).toLocaleString('en-GB', { maximumFractionDigits: decimals }) : '—'
 
@@ -56,14 +56,16 @@ export default function AdminDashboard() {
   const [stats, setStats] = useState(null)
   const [usability, setUsability] = useState(null)
   const [performance, setPerformance] = useState(null)
+  const [propertyTypeCount, setPropertyTypeCount] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    Promise.allSettled([getDashboardStats(), getUsabilitySummary(), getPerformanceSummary()])
-      .then(([sr, ur, pr]) => {
+    Promise.allSettled([getDashboardStats(), getUsabilitySummary(), getPerformanceSummary(), getPropertyTypes()])
+      .then(([sr, ur, pr, tr]) => {
         if (sr.status === 'fulfilled') setStats(sr.value.data)
         if (ur.status === 'fulfilled') setUsability(ur.value.data)
         if (pr.status === 'fulfilled') setPerformance(pr.value.data)
+        if (tr.status === 'fulfilled') setPropertyTypeCount((tr.value.data?.types || []).length)
       })
       .finally(() => setLoading(false))
   }, [])
@@ -124,7 +126,7 @@ export default function AdminDashboard() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14, marginBottom: 28 }} className="stat-grid-5">
           <StatCard label="Precision@5" value={stats?.precision_at_5 ?? '—'} sub="How often top-5 are relevant" color="var(--c-indigo)" />
           <StatCard label="Recall@5" value={stats?.recall_at_5 ?? '—'} sub="Coverage of relevant results" color="#7C3AED" />
-          <StatCard label="Avg Diversity" value={fmt(stats?.avg_diversity, 2)} sub="Intra-list variety score" color="#0EA5E9" />
+          <StatCard label="Avg Diversity" value={fmt(stats?.avg_diversity, 4)} sub="Intra-list variety score" color="#0EA5E9" />
           <StatCard label="Gini Exposure" value={stats?.gini_exposure != null ? fmt(stats.gini_exposure, 3) : '—'} sub="0 = fair, 1 = unfair" color={stats?.gini_exposure > 0.5 ? '#DC2626' : '#059669'} />
           <StatCard label="Never Recommended" value={stats?.never_recommended_pct != null ? `${fmt(stats.never_recommended_pct, 1)}%` : '—'} sub="Properties with 0 exposure" color="#D97706" />
         </div>
@@ -134,7 +136,7 @@ export default function AdminDashboard() {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 28 }} className="chart-grid">
           <ChartPanel title="Rent Distribution" filename="rent_distribution.png" sub="Monthly rent frequency histogram" />
           <ChartPanel title="Bedroom Distribution" filename="bedroom_distribution.png" sub="Bedroom count frequency" />
-          <ChartPanel title="Property Types" filename="property_type_distribution.png" sub="Distribution across 27 property types" />
+          <ChartPanel title="Property Types" filename="property_type_distribution.png" sub={`Distribution across ${propertyTypeCount ?? '—'} property types`} />
           <ChartPanel title="Recommendation Exposure" filename="exposure_distribution.png" sub="Frequency properties appear in top-5 results" />
         </div>
 
