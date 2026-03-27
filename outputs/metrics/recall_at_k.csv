@@ -1,0 +1,7 @@
+model,value
+baseline_filtering,0.0575
+content_based_old,0.0481
+hybrid_0.90_0.10,0.0257
+hybrid_0.85_0.15,0.0228
+hybrid_0.80_0.20,0.0209
+hybrid_0.70_0.30,0.0163

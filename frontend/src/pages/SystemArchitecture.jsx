@@ -11,31 +11,31 @@ const LAYERS = [
   },
   {
     n: '02', icon: HardDrives, title: 'FastAPI Backend',
-    tech: 'Python 3.11 · FastAPI · Uvicorn · Pydantic · JWT',
+    tech: 'Python 3.12 · FastAPI · Uvicorn · Pydantic · JWT',
     desc: 'REST API that serves property data, handles authentication, and delegates recommendation requests to the AI engine.',
     items: ['GET /properties', 'POST /recommend', 'POST /login  /register', 'GET /dashboard/stats'],
     col: '#0EA5E9', bg: '#F0F9FF',
   },
   {
     n: '03', icon: Cpu, title: 'AI Recommendation Engine',
-    tech: 'scikit-learn · NumPy · MinMaxScaler · cosine_similarity',
-    desc: 'Content-based filtering module. Encodes user preferences into a feature vector, normalises via MinMaxScaler, and ranks all 3,406 properties by cosine similarity.',
-    items: ['6-feature vector', 'MinMaxScaler normalisation', 'cosine_similarity()', 'Explainability per property'],
+    tech: 'scikit-learn · NumPy · sentence-transformers · hybrid similarity',
+    desc: 'Hybrid module that combines structured cosine similarity with semantic embedding similarity (0.85 / 0.15) for ranking 3,406 properties.',
+    items: ['6-feature structured vector', 'MiniLM semantic embeddings', 'weighted hybrid scoring', 'Explainability per property'],
     col: '#7C3AED', bg: '#F5F3FF',
   },
   {
     n: '04', icon: Database, title: 'Dataset & Pre-trained Artefacts',
     tech: 'London Property Dataset · Kaggle · CSV · .npy · .pkl',
-    desc: 'Cleaned 3,406-property London rental dataset with pre-computed 88 MB similarity matrix and fitted MinMaxScaler loaded at startup.',
-    items: ['cleaned_dataset.csv  (3,406 rows)', 'similarity_matrix.npy  (88 MB)', 'scaler.pkl  (MinMaxScaler)'],
+    desc: 'Cleaned 3,406-property London rental dataset with pre-computed ~93 MB similarity matrix and fitted MinMaxScaler loaded at startup.',
+    items: ['cleaned_dataset.csv  (3,406 rows)', 'similarity_matrix.npy  (~93 MB)', 'scaler.pkl  (MinMaxScaler)'],
     col: '#059669', bg: '#ECFDF5',
   },
 ]
 
 const DECISIONS = [
-  { q: 'Why Content-Based over Collaborative Filtering?', a: 'Collaborative filtering suffers from the cold-start problem with new users. Content-based filtering uses explicit property features, requires no user history, and enables transparent explainability.' },
+  { q: 'Why Hybrid (Structured + Semantic) over Collaborative Filtering?', a: 'Collaborative filtering suffers from cold-start in this dataset. The hybrid approach preserves transparent structured matching while adding lightweight semantic context from listing text.' },
   { q: 'Why Cosine Similarity?', a: 'Cosine similarity is scale-invariant and measures the angle between feature vectors rather than Euclidean distance, making it robust to feature scale differences even after normalisation.' },
-  { q: 'Why MinMaxScaler?', a: 'Features span wildly different ranges (rent: £50–£78k, station distance: 0.1–10.8 km). MinMaxScaler maps all features to [0, 1] ensuring equal contribution to the similarity score.' },
+  { q: 'Why MinMaxScaler?', a: 'Features span different ranges (rent: £50–£10,375, station distance: 0.1–10.8 km). MinMaxScaler maps all features to [0, 1] ensuring balanced contribution to similarity scoring.' },
   { q: 'Why FastAPI?', a: 'FastAPI provides async support, automatic OpenAPI/Swagger docs, and native Pydantic validation — ideal for wrapping NumPy and pandas-based AI pipelines as a production-grade REST API.' },
 ]
 
@@ -163,7 +163,7 @@ export default function SystemArchitecturePage() {
 
         {/* Tech stack chips */}
         <div style={{ marginTop: 32, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          {['React 18', 'Vite 7', 'TailwindCSS', 'Framer Motion', 'FastAPI', 'Python 3.11', 'scikit-learn', 'NumPy', 'Pandas', 'MinMaxScaler', 'Cosine Similarity', 'JWT', 'bcrypt', 'Axios'].map(t => (
+          {['React 18', 'Vite 7', 'TailwindCSS', 'Framer Motion', 'FastAPI', 'Python 3.12', 'scikit-learn', 'sentence-transformers', 'NumPy', 'Pandas', 'MinMaxScaler', 'Cosine Similarity', 'JWT', 'PBKDF2', 'Axios'].map(t => (
             <span key={t} style={{ padding: '5px 12px', borderRadius: 20, background: 'var(--c-surface)', border: '1px solid var(--c-border)', fontSize: '0.8125rem', fontWeight: 500, color: 'var(--c-text-3)' }}>{t}</span>
           ))}
         </div>

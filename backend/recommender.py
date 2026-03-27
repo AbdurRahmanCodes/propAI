@@ -11,9 +11,17 @@ from sklearn.metrics.pairwise import cosine_similarity
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
+try:
+    from sentence_transformers import SentenceTransformer
+except Exception:
+    SentenceTransformer = None
+
 BASE_DIR = Path(__file__).parent.parent
 MODELS_DIR = BASE_DIR / "outputs" / "models"
 DATA_DIR = BASE_DIR / "outputs" / "data"
+
+STRUCTURED_WEIGHT = 0.85
+EMBEDDING_WEIGHT = 0.15
 
 FEATURE_COLS = [
     "rent",
@@ -41,6 +49,50 @@ _scaler = joblib.load(MODELS_DIR / "scaler.pkl")
 print("[Recommender] Scaling feature matrix...")
 _X_scaled = _scaler.transform(_df_features.values)
 
+
+def _build_property_text(df: pd.DataFrame) -> pd.Series:
+    return (
+        df["property_type"].fillna("unknown_type").astype(str)
+        + " "
+        + df["subdistrict_code"].fillna("unknown_location").astype(str)
+        + " "
+        + df["furnish_type"].fillna("unknown_furnish").astype(str)
+    )
+
+
+def _build_query_text(bedrooms: int, bathrooms: int, max_distance: float) -> str:
+    return (
+        f"{bedrooms} bedroom {bathrooms} bathroom "
+        f"rental near transport within {max_distance:.2f} km"
+    )
+
+
+_semantic_model = None
+_property_embeddings = None
+
+if SentenceTransformer is not None:
+    try:
+        print("[Recommender] Loading sentence-transformer model...")
+        _semantic_model = SentenceTransformer("all-MiniLM-L6-v2")
+
+        _emb_path = MODELS_DIR / "embeddings.npy"
+        if _emb_path.exists():
+            _property_embeddings = np.load(_emb_path)
+        else:
+            print("[Recommender] embeddings.npy not found, generating property embeddings...")
+            _property_embeddings = _semantic_model.encode(
+                _build_property_text(_df).tolist(),
+                convert_to_numpy=True,
+                normalize_embeddings=True,
+                show_progress_bar=False,
+            ).astype(np.float32)
+    except Exception as ex:
+        print(f"[Recommender] Semantic model disabled due to startup error: {ex}")
+        _semantic_model = None
+        _property_embeddings = None
+else:
+    print("[Recommender] sentence-transformers not installed, using structured similarity only.")
+
 # Load pre-computed similarity matrix for property-to-property lookups
 print("[Recommender] Loading similarity matrix...")
 _sim_path = MODELS_DIR / "similarity_matrix.npy"
@@ -63,7 +115,8 @@ def _clean(prop: dict) -> dict:
 
 
 def _build_explanation(prop: dict, budget: float, bedrooms: int,
-                       bathrooms: int, max_distance: float) -> List[str]:
+                       bathrooms: int, max_distance: float,
+                       semantic_score: Optional[float] = None) -> List[str]:
     """Return human-readable reasons why this property matches the user vector."""
     reasons = []
     rent = prop.get("rent", 0) or 0
@@ -76,6 +129,8 @@ def _build_explanation(prop: dict, budget: float, bedrooms: int,
     dist = prop.get("avg_distance_to_nearest_station")
     if dist is not None and float(dist) <= max_distance + 0.3:
         reasons.append("Close to transport links")
+    if semantic_score is not None and semantic_score >= 0.40:
+        reasons.append("Similar property type and location (semantic match)")
     if not reasons:
         reasons.append("Best available feature match")
     return reasons
@@ -120,7 +175,22 @@ def recommend(budget: float, bedrooms: int, bathrooms: int,
         _col_medians["nearest_station_count"],  # near-constant in dataset
     ]], dtype=float)
     user_scaled = _scaler.transform(user_vec)
-    sims = cosine_similarity(user_scaled, _X_scaled)[0]
+    structured_sims = cosine_similarity(user_scaled, _X_scaled)[0]
+
+    semantic_sims = None
+    if _semantic_model is not None and _property_embeddings is not None:
+        query_text = _build_query_text(bedrooms, bathrooms, max_distance)
+        query_embedding = _semantic_model.encode(
+            [query_text],
+            convert_to_numpy=True,
+            normalize_embeddings=True,
+            show_progress_bar=False,
+        ).astype(np.float32)
+        semantic_sims = cosine_similarity(query_embedding, _property_embeddings)[0]
+        sims = STRUCTURED_WEIGHT * structured_sims + EMBEDDING_WEIGHT * semantic_sims
+    else:
+        sims = structured_sims
+
     top_idx = sims.argsort()[::-1][:top_n]
 
     results = []
@@ -138,7 +208,14 @@ def recommend(budget: float, bedrooms: int, bathrooms: int,
             "avg_distance_to_nearest_station": prop.get("avg_distance_to_nearest_station"),
             "furnish_type": prop.get("furnish_type"),
             "similarity_score": round(float(sims[idx]) * 100, 1),
-            "explanation": _build_explanation(prop, budget, bedrooms, bathrooms, max_distance),
+            "explanation": _build_explanation(
+                prop,
+                budget,
+                bedrooms,
+                bathrooms,
+                max_distance,
+                semantic_score=None if semantic_sims is None else float(semantic_sims[idx]),
+            ),
         })
     return results
 

@@ -30,22 +30,42 @@ from time import perf_counter
 import os
 from dotenv import load_dotenv
 
-load_dotenv()
+# Load env from both project root and backend directory so startup works
+# regardless of current working directory.
+BACKEND_DIR = FilePath(__file__).resolve().parent
+ROOT_DIR = BACKEND_DIR.parent
+load_dotenv(ROOT_DIR / ".env")
+load_dotenv(BACKEND_DIR / ".env")
 
-from models import (
-    RegisterRequest, LoginRequest, TokenResponse,
-    RecommendRequest, DashboardStats, FavoriteRequest,
-    ListingCreate, UsabilityLog,
-)
-from auth import (
-    hash_password, verify_password, create_access_token,
-    get_current_user, get_current_role, require_auth, require_landlord,
-    ACCESS_TOKEN_EXPIRE_MINUTES,
-)
-import database as db
-import recommender
+try:
+    from .models import (
+        RegisterRequest, LoginRequest, TokenResponse,
+        RecommendRequest, DashboardStats, FavoriteRequest,
+        ListingCreate, ListingUpdate, UsabilityLog,
+    )
+    from .auth import (
+        hash_password, verify_password, create_access_token,
+        get_current_user, get_current_role, require_auth, require_landlord,
+        ACCESS_TOKEN_EXPIRE_MINUTES,
+    )
+    from . import database as db
+    from . import recommender
+except ImportError:
+    # Fallback for running directly from the backend directory.
+    from models import (
+        RegisterRequest, LoginRequest, TokenResponse,
+        RecommendRequest, DashboardStats, FavoriteRequest,
+        ListingCreate, ListingUpdate, UsabilityLog,
+    )
+    from auth import (
+        hash_password, verify_password, create_access_token,
+        get_current_user, get_current_role, require_auth, require_landlord,
+        ACCESS_TOKEN_EXPIRE_MINUTES,
+    )
+    import database as db
+    import recommender
 
-BASE_DIR = FilePath(__file__).parent.parent
+BASE_DIR = ROOT_DIR
 FIGURES_DIR = BASE_DIR / "outputs" / "figures"
 DATA_DIR = BASE_DIR / "outputs" / "data"
 METRICS_DIR = BASE_DIR / "outputs" / "metrics"
@@ -58,6 +78,31 @@ CORS_ORIGINS = [
 ]
 PERFORMANCE_WINDOW_SIZE = int(os.getenv("PERFORMANCE_WINDOW_SIZE", "500"))
 _request_timings = deque(maxlen=PERFORMANCE_WINDOW_SIZE)
+
+
+def _get_metric_from_file(metric_name: str, default: float = 0.0) -> float:
+    try:
+        metrics_df = pd.read_csv(METRICS_DIR / "model_metrics.csv")
+        matches = metrics_df[metrics_df["metric"] == metric_name]["value"]
+        if len(matches) > 0:
+            return float(matches.values[0])
+    except Exception:
+        pass
+    return default
+
+
+def _get_selected_model_row() -> Optional[pd.Series]:
+    try:
+        comparison_df = pd.read_csv(METRICS_DIR / "model_comparison.csv")
+        preferred = comparison_df[comparison_df["model"] == "hybrid_0.85_0.15"]
+        if not preferred.empty:
+            return preferred.iloc[0]
+        hybrid_rows = comparison_df[comparison_df["model"].str.startswith("hybrid_", na=False)]
+        if not hybrid_rows.empty:
+            return hybrid_rows.iloc[0]
+    except Exception:
+        return None
+    return None
 
 
 def _serialise_landlord_listing(listing: dict) -> dict:
@@ -252,6 +297,53 @@ async def create_property(data: ListingCreate, username: str = Depends(require_l
     return {"message": "Listing created successfully", "listing": doc}
 
 
+@app.get("/landlord/listings", tags=["Properties"])
+async def get_my_landlord_listings(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    username: str = Depends(require_landlord),
+):
+    listings, total = await db.get_landlord_listings(skip=skip, limit=limit, landlord=username)
+    return {
+        "total": total,
+        "skip": skip,
+        "limit": limit,
+        "data": [_serialise_landlord_listing(lp) for lp in listings],
+    }
+
+
+@app.put("/properties/{property_id}", tags=["Properties"])
+async def update_property(property_id: str, data: ListingUpdate, username: str = Depends(require_landlord)):
+    prefix = "landlord_"
+    if not property_id.startswith(prefix):
+        raise HTTPException(status_code=403, detail="Only landlord-created listings can be updated")
+
+    listing_id = property_id[len(prefix):]
+    updates = data.dict(exclude_none=True)
+    if not updates:
+        raise HTTPException(status_code=400, detail="No updates provided")
+
+    updated = await db.update_listing_by_owner(listing_id, username, updates)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Listing not found or not owned by current landlord")
+
+    return {"message": "Listing updated successfully", "listing": _serialise_landlord_listing(updated)}
+
+
+@app.delete("/properties/{property_id}", tags=["Properties"])
+async def delete_property(property_id: str, username: str = Depends(require_landlord)):
+    prefix = "landlord_"
+    if not property_id.startswith(prefix):
+        raise HTTPException(status_code=403, detail="Only landlord-created listings can be removed")
+
+    listing_id = property_id[len(prefix):]
+    deleted = await db.delete_listing_by_owner(listing_id, username)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Listing not found or not owned by current landlord")
+
+    return {"message": "Listing removed successfully"}
+
+
 @app.get("/properties/{property_id}/contact", tags=["Properties"])
 async def get_property_contact(property_id: str, username: Optional[str] = Depends(get_current_user)):
     prop, _ = await _get_property_record(property_id)
@@ -308,19 +400,28 @@ async def get_recommendations(data: RecommendRequest, username: Optional[str] = 
         "results_count": len(results),
         "top_result_id": (results[0]["id"] if results else None),
     })
+    model_row = _get_selected_model_row()
+    precision_at_5 = _get_metric_from_file("precision@5", 0.6528)
+    recall_at_5 = _get_metric_from_file("recall@5", 0.0228)
+
     return {
         "preferences": data.dict(),
         "recommendations": results,
         "model_info": {
-            "algorithm": "Content-Based Filtering",
-            "similarity_metric": "Cosine Similarity",
+            "algorithm": "Hybrid Similarity (Structured + Semantic)",
+            "similarity_metric": "Cosine Similarity + Embedding Cosine",
             "features_used": [
                 "rent", "bedrooms", "bathrooms",
                 "size", "avg_distance_to_nearest_station", "nearest_station_count"
             ],
             "scaler": "MinMaxScaler",
-            "precision_at_5": 0.622,
-            "recall_at_5": 0.497,
+            "hybrid_weights": {
+                "structured": float(getattr(recommender, "STRUCTURED_WEIGHT", 0.85)),
+                "embedding": float(getattr(recommender, "EMBEDDING_WEIGHT", 0.15)),
+            },
+            "precision_at_5": precision_at_5,
+            "recall_at_5": recall_at_5,
+            "ndcg_at_5": (float(model_row["ndcg@5"]) if model_row is not None and "ndcg@5" in model_row else None),
         },
     }
 
@@ -449,13 +550,9 @@ async def usability_summary():
 def dashboard_stats():
     """Return model metrics and dataset statistics."""
     stats_df = pd.read_csv(DATA_DIR / "dashboard_stats.csv")
-    metrics_df = pd.read_csv(METRICS_DIR / "model_metrics.csv")
 
     row = stats_df.iloc[0]
-
-    def get_metric(name: str, default: float = 0.0) -> float:
-        matches = metrics_df[metrics_df["metric"] == name]["value"]
-        return float(matches.values[0]) if len(matches) > 0 else default
+    model_row = _get_selected_model_row()
 
     # Gini coefficient of exposure distribution
     gini_val = 0.0
@@ -483,9 +580,13 @@ def dashboard_stats():
         average_rent=round(float(row["average_rent"]), 2),
         max_rent=float(row["max_rent"]),
         min_rent=float(row["min_rent"]),
-        precision_at_5=get_metric("precision@5", 0.622),
-        recall_at_5=get_metric("recall@5", 0.497),
-        avg_diversity=float(row.get("avg_diversity", 2.31)),
+        precision_at_5=_get_metric_from_file("precision@5", 0.6528),
+        recall_at_5=_get_metric_from_file("recall@5", 0.0228),
+        avg_diversity=(
+            float(model_row["avg_diversity"])
+            if model_row is not None and "avg_diversity" in model_row
+            else float(row.get("avg_diversity", 0.0047))
+        ),
         gini_exposure=gini_val,
         never_recommended_pct=never_pct,
     )

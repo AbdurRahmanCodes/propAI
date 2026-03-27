@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import { Heart, SignOut, Sparkle, Buildings, Robot, ArrowsLeftRight, ClockCounterClockwise, UserCircle } from '@phosphor-icons/react'
 import { useAuth } from '../context/AuthContext'
-import { getFavorites, getMyJourneySummary } from '../services/api'
+import { deleteListing, getFavorites, getMyJourneySummary, getMyListings, updateListing } from '../services/api'
 import PropertyCard from '../components/PropertyCard'
 
 export default function ProfilePage() {
@@ -10,19 +10,107 @@ export default function ProfilePage() {
   const [favs, setFavs] = useState([])
   const [journey, setJourney] = useState(null)
   const [loading, setLoading] = useState(true)
-
-  if (!user) return <Navigate to="/login" />
+  const [myListings, setMyListings] = useState([])
+  const [listingsLoading, setListingsLoading] = useState(false)
+  const [listingsError, setListingsError] = useState('')
+  const [editingId, setEditingId] = useState('')
+  const [editForm, setEditForm] = useState({
+    address: '',
+    rent: '',
+    deposit: '',
+    bedrooms: '',
+    bathrooms: '',
+    property_type: '',
+    furnish_type: '',
+    let_type: '',
+    avg_distance_to_nearest_station: '',
+    description: '',
+    contact_email: '',
+    contact_phone: '',
+  })
 
   useEffect(() => {
+    if (!user) {
+      setLoading(false)
+      return
+    }
+
     Promise.allSettled([getFavorites(), getMyJourneySummary()])
       .then(([favsRes, journeyRes]) => {
         if (favsRes.status === 'fulfilled') setFavs(favsRes.value.data.favorites)
         if (journeyRes.status === 'fulfilled') setJourney(journeyRes.value.data)
       })
       .finally(() => setLoading(false))
-  }, [])
+
+    if (user.role === 'landlord') {
+      loadMyListings()
+    }
+  }, [user])
+
+  if (!user) return <Navigate to="/login" />
 
   const refresh = () => getFavorites().then(r => setFavs(r.data.favorites)).catch(() => {})
+
+  const loadMyListings = () => {
+    setListingsLoading(true)
+    setListingsError('')
+    return getMyListings({ limit: 100 })
+      .then((res) => setMyListings(res.data.data || []))
+      .catch((err) => setListingsError(err?.response?.data?.detail || 'Failed to load your listings.'))
+      .finally(() => setListingsLoading(false))
+  }
+
+  const startEdit = (listing) => {
+    setEditingId(listing.id)
+    setEditForm({
+      address: listing.address || '',
+      rent: listing.rent ?? '',
+      deposit: listing.deposit ?? '',
+      bedrooms: listing.bedrooms ?? '',
+      bathrooms: listing.bathrooms ?? '',
+      property_type: listing.property_type || '',
+      furnish_type: listing.furnish_type || '',
+      let_type: listing.let_type || '',
+      avg_distance_to_nearest_station: listing.avg_distance_to_nearest_station ?? '',
+      description: listing.description || '',
+      contact_email: listing.contact_email || '',
+      contact_phone: listing.contact_phone || '',
+    })
+  }
+
+  const onEditField = (key) => (e) => setEditForm((prev) => ({ ...prev, [key]: e.target.value }))
+
+  const saveEdit = async () => {
+    const payload = {
+      ...editForm,
+      rent: editForm.rent === '' ? undefined : Number(editForm.rent),
+      deposit: editForm.deposit === '' ? undefined : Number(editForm.deposit),
+      bedrooms: editForm.bedrooms === '' ? undefined : Number(editForm.bedrooms),
+      bathrooms: editForm.bathrooms === '' ? undefined : Number(editForm.bathrooms),
+      avg_distance_to_nearest_station: editForm.avg_distance_to_nearest_station === ''
+        ? undefined
+        : Number(editForm.avg_distance_to_nearest_station),
+    }
+
+    try {
+      await updateListing(editingId, payload)
+      setEditingId('')
+      await loadMyListings()
+    } catch (err) {
+      setListingsError(err?.response?.data?.detail || 'Failed to update listing.')
+    }
+  }
+
+  const removeMyListing = async (listingId) => {
+    if (!window.confirm('Delete this listing? This action cannot be undone.')) return
+    try {
+      await deleteListing(listingId)
+      if (editingId === listingId) setEditingId('')
+      await loadMyListings()
+    } catch (err) {
+      setListingsError(err?.response?.data?.detail || 'Failed to delete listing.')
+    }
+  }
 
   return (
     <div className="page-shell">
@@ -78,6 +166,64 @@ export default function ProfilePage() {
             ))}
           </div>
 
+          {user.role === 'landlord' && (
+            <section style={{ marginBottom: 30 }}>
+              <div className="section-intro">
+                <div>
+                  <p className="label" style={{ marginBottom: 8 }}>Listing Lifecycle</p>
+                  <h2 className="heading-3">Manage your listings</h2>
+                </div>
+                <span className="tag tag-indigo">{myListings.length} active</span>
+              </div>
+
+              {listingsError && <p style={{ fontSize: '0.875rem', color: 'var(--c-red)', marginBottom: 10 }}>{listingsError}</p>}
+
+              {listingsLoading ? (
+                <div style={{ display: 'flex', justifyContent: 'center', padding: '20px 0' }}><div className="spinner" /></div>
+              ) : myListings.length === 0 ? (
+                <div className="empty-state" style={{ padding: '20px' }}>
+                  <p style={{ fontWeight: 600, color: 'var(--c-text-3)', marginBottom: 4 }}>No landlord listings yet</p>
+                  <p style={{ fontSize: '0.875rem', color: 'var(--c-text-4)' }}>Create one from the list property page, then update or remove it here.</p>
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 14 }} className="landlord-listings-grid">
+                  {myListings.map((listing) => (
+                    <div key={listing.id} className="surface-subtle" style={{ padding: 14 }}>
+                      <p style={{ fontWeight: 700, marginBottom: 6, color: 'var(--c-text)' }}>{listing.address}</p>
+                      <p style={{ fontSize: '0.84rem', color: 'var(--c-text-3)', marginBottom: 12 }}>
+                        £{Number(listing.rent || 0).toLocaleString()} · {listing.bedrooms || '-'} bed · {listing.bathrooms || '-'} bath
+                      </p>
+
+                      {editingId === listing.id ? (
+                        <div style={{ display: 'grid', gap: 8 }}>
+                          <input className="input" value={editForm.address} onChange={onEditField('address')} placeholder="Address" />
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                            <input className="input" type="number" value={editForm.rent} onChange={onEditField('rent')} placeholder="Rent" />
+                            <input className="input" type="number" value={editForm.deposit} onChange={onEditField('deposit')} placeholder="Deposit" />
+                          </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                            <input className="input" type="number" value={editForm.bedrooms} onChange={onEditField('bedrooms')} placeholder="Bedrooms" />
+                            <input className="input" type="number" value={editForm.bathrooms} onChange={onEditField('bathrooms')} placeholder="Bathrooms" />
+                          </div>
+                          <textarea className="input" rows={2} value={editForm.description} onChange={onEditField('description')} placeholder="Description" style={{ resize: 'vertical' }} />
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            <button className="btn btn-primary btn-sm" onClick={saveEdit}>Save</button>
+                            <button className="btn btn-white btn-sm" onClick={() => setEditingId('')}>Cancel</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <button className="btn btn-white btn-sm" onClick={() => startEdit(listing)}>Edit</button>
+                          <button className="btn btn-white btn-sm" style={{ color: 'var(--c-red)' }} onClick={() => removeMyListing(listing.id)}>Delete</button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+
           <div className="section-intro">
             <div>
               <p className="label" style={{ marginBottom: 8 }}>Saved List</p>
@@ -101,7 +247,7 @@ export default function ProfilePage() {
           )}
         </div>
       </div>
-      <style>{`@media(max-width:900px){.favs-grid{grid-template-columns:repeat(2,1fr)!important;}.journey-stats-grid{grid-template-columns:repeat(2,1fr)!important;}}@media(max-width:500px){.favs-grid{grid-template-columns:1fr!important;}.journey-stats-grid{grid-template-columns:1fr!important;}}`}</style>
+      <style>{`@media(max-width:900px){.favs-grid{grid-template-columns:repeat(2,1fr)!important;}.journey-stats-grid{grid-template-columns:repeat(2,1fr)!important;}.landlord-listings-grid{grid-template-columns:1fr!important;}}@media(max-width:500px){.favs-grid{grid-template-columns:1fr!important;}.journey-stats-grid{grid-template-columns:1fr!important;}}`}</style>
     </div>
   )
 }

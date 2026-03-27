@@ -31,25 +31,25 @@ function ChartPanel({ title, filename, sub }) {
   )
 }
 
-const METRIC_TABLE = [
-  { metric: 'Algorithm', value: 'Content-Based Filtering' },
-  { metric: 'Similarity Metric', value: 'Cosine Similarity' },
+const buildMetricTable = (stats) => [
+  { metric: 'Algorithm', value: 'Hybrid Similarity (0.85 structured / 0.15 semantic)' },
+  { metric: 'Similarity Metric', value: 'Cosine Similarity + Embedding Cosine' },
   { metric: 'Normalisation', value: 'MinMaxScaler' },
   { metric: 'Features Used', value: '6 (rent, bedrooms, bathrooms, size, distance, station count)' },
   { metric: 'Train/Test Split', value: '80% / 20%' },
-  { metric: 'Dataset', value: 'London Rental Properties (3,406 records)' },
-  { metric: 'Precision@5', value: '0.622 — 62.2% of top-5 results match user preferences' },
-  { metric: 'Recall@5', value: '0.497 — 49.7% of all relevant properties surfaced in top-5' },
-  { metric: 'Intra-list Diversity', value: '2.31 / 5.0 — moderate variety across recommended properties' },
+  { metric: 'Dataset', value: `London Rental Properties (${fmt(stats?.total_properties)} records)` },
+  { metric: 'Precision@5', value: `${stats?.precision_at_5 ?? '—'} — updated hybrid model score` },
+  { metric: 'Recall@5', value: `${stats?.recall_at_5 ?? '—'} — strict relevance definition` },
+  { metric: 'Intra-list Diversity', value: `${fmt(stats?.avg_diversity, 4)} — updated hybrid diversity score` },
 ]
 
-// Thesis usability study results (5 participants, conducted 2025)
+// Thesis usability study results (5 participants, conducted 2026)
 const USABILITY_TASKS = [
-  { task: 'Search and filter properties', success: 5, total: 5 },
-  { task: 'Get AI recommendations', success: 5, total: 5 },
+  { task: 'Browse property listings', success: 5, total: 5 },
+  { task: 'Search with filters', success: 5, total: 5 },
   { task: 'Compare AI vs query methods', success: 4, total: 5 },
-  { task: 'View property detail page', success: 5, total: 5 },
-  { task: 'Register and manage profile', success: 4, total: 5 },
+  { task: 'Get AI recommendations', success: 4, total: 5 },
+  { task: 'Save a property', success: 3, total: 5 },
 ]
 
 export default function AdminDashboard() {
@@ -91,9 +91,9 @@ export default function AdminDashboard() {
             <div className="metric-strip" style={{ marginTop: 28 }}>
               {[
                 { val: fmt(stats?.total_properties), sub: 'properties' },
-                { val: stats?.precision_at_5 ?? '0.622', sub: 'precision@5' },
-                { val: stats?.recall_at_5 ?? '0.497', sub: 'recall@5' },
-                { val: fmt(stats?.avg_diversity, 2) || '2.31', sub: 'diversity / 5' },
+                { val: stats?.precision_at_5 ?? '—', sub: 'precision@5' },
+                { val: stats?.recall_at_5 ?? '—', sub: 'recall@5' },
+                { val: fmt(stats?.avg_diversity, 4), sub: 'avg diversity' },
                 { val: '6', sub: 'model features' },
                 { val: '74.5', sub: 'SUS score' },
               ].map(item => (
@@ -141,8 +141,8 @@ export default function AdminDashboard() {
         {/* Usability Evaluation */}
         <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--c-text-4)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>Usability Evaluation — Study Results</p>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 16 }} className="stat-grid">
-          <StatCard label="Participants" value="5" sub="Usability study (2025)" color="var(--c-indigo)" />
-          <StatCard label="Avg Completion" value="89%" sub="Across all 5 tasks" color="#059669" />
+          <StatCard label="Participants" value="5" sub="Usability study (2026)" color="var(--c-indigo)" />
+          <StatCard label="Avg Completion" value="84%" sub="Across all 5 tasks" color="#059669" />
           <StatCard label="SUS Score" value="74.5" sub="System Usability Scale / 100" color="#0EA5E9" />
           <StatCard label="SUS Grade" value="C+" sub="Acceptability: Good" color="#7C3AED" />
         </div>
@@ -231,7 +231,7 @@ export default function AdminDashboard() {
               </tr>
             </thead>
             <tbody>
-              {METRIC_TABLE.map((row, i) => (
+              {buildMetricTable(stats).map((row, i) => (
                 <tr key={row.metric} style={{ borderTop: '1px solid var(--c-border)', background: i % 2 === 0 ? '#fff' : 'var(--c-surface)' }}>
                   <td style={{ padding: '11px 20px', fontSize: '0.875rem', fontWeight: 600, color: 'var(--c-text-2)' }}>{row.metric}</td>
                   <td style={{ padding: '11px 20px', fontSize: '0.875rem', color: 'var(--c-text-3)', fontFamily: row.metric.includes('Algorithm') || row.metric.includes('Metric') ? 'inherit' : 'monospace' }}>{row.value}</td>

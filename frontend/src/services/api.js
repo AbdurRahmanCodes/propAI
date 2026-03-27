@@ -20,6 +20,9 @@ export const getProperty       = (id)          => API.get(`/properties/${id}`)
 export const getPropertyContact = (id)         => API.get(`/properties/${id}/contact`)
 export const getPropertyTypes  = ()            => API.get('/properties/types')
 export const createListing     = (data)        => API.post('/properties', data)
+export const getMyListings     = (params = {}) => API.get('/landlord/listings', { params })
+export const updateListing     = (id, data)    => API.put(`/properties/${id}`, data)
+export const deleteListing     = (id)          => API.delete(`/properties/${id}`)
 
 // ── AI Recommendations ─────────────────────────────────────────────────────
 export const getRecommendations = (data) => API.post('/recommend', data)

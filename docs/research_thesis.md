@@ -4,9 +4,9 @@
 
 ---
 
-**Student Name:** [Student Name]  
-**Student Number:** [Student Number]  
-**Supervisor:** [Supervisor Name]  
+**Student Name:** Abdur Rahman  
+**Student Number:** 221457  
+**Supervisor:** COM748 Assigned Supervisor  
 **Module:** COM748 Masters Research Project  
 **Submission Date:** March 2026  
 **Word Count:** ~9,800  
@@ -15,7 +15,7 @@
 
 ## Abstract
 
-The UK rental market is characterised by a high volume of listings managed through intermediary platforms that limit direct interaction between landlords and tenants. This dissertation presents the design, implementation, and evaluation of an AI-driven property recommendation and direct-to-landlord listing platform specifically targeting the London rental market. The platform integrates a content-based filtering recommendation engine using cosine similarity over a six-dimensional normalised feature space derived from the London Property Rental Dataset (3,406 cleaned records). The system adopts a two-role architecture — landlord and tenant — enforced through JWT-based role-based access control. Model evaluation on a held-out 20% test set reports **Precision@5 = 0.622** and **Recall@5 = 0.497**. An intra-list diversity score of **2.31 out of 5** confirms result variety. Fairness analysis reveals that 2,593 of 3,406 properties (76.1%) are never surfaced in top-5 results, identifying recommendation exposure as a meaningful area for future improvement. A comparison module exposes both AI and criteria-based query results side-by-side for the same user input, demonstrating that the two approaches find different but complementary subsets of relevant properties due to their fundamentally different ranking functions. The full-stack platform — React 18 frontend, FastAPI backend, MongoDB Atlas persistence — passed build validation and backend smoke testing at 3,406 catalogue items with correct pagination of 12 items per page. Usability evaluation was structured around a 5-task think-aloud study with a SUS questionnaire embedded in the platform's `/usability` route. This work contributes a reproducible, open-source prototype demonstrating how structured housing data, content-based AI, and transparent platform design can be combined to improve rental market usability.
+The UK rental market is characterised by a high volume of listings managed through intermediary platforms that limit direct interaction between landlords and tenants. This dissertation presents the design, implementation, and evaluation of an AI-driven property recommendation and direct-to-landlord listing platform specifically targeting the London rental market. The platform integrates a content-based filtering recommendation engine using cosine similarity over a six-dimensional normalised feature space derived from the London Property Rental Dataset (3,406 cleaned records), then extends it with lightweight semantic embeddings in a hybrid ranking formulation. The system adopts a two-role architecture — landlord and tenant — enforced through JWT-based role-based access control. Comparative evaluation across baseline filtering, content-based ranking, and multiple hybrid weight configurations shows that the selected operational setting (**0.85 structured / 0.15 embedding**) achieves **Precision@5 = 0.6528**, **Recall@5 = 0.0228**, **F1@5 = 0.0302**, **NDCG@5 = 0.6728**, and **Coverage = 30.18%**. The results show a clear trade-off: increasing semantic weight improves variety but reduces precision and recall on this strongly structured dataset; therefore a structured-dominant hybrid is selected for deployment while preserving semantic contribution for research value. The full-stack platform — React 18 frontend, FastAPI backend, MongoDB Atlas persistence — passed build validation and backend smoke testing at 3,406 catalogue items with correct pagination of 12 items per page. Usability evaluation was structured around a 5-task think-aloud study with a SUS questionnaire embedded in the platform's `/usability` route. This work contributes a reproducible, open-source prototype demonstrating how structured housing data, lightweight semantic vectors, and transparent platform design can be combined to improve rental market usability.
 
 ---
 
@@ -68,7 +68,7 @@ References
 The United Kingdom rental market is one of the largest in Europe, with approximately 4.6 million privately rented households as of 2023. The dominant model for rental discovery involves aggregation portals (such as Rightmove and Zoopla) where letting agencies post listings on behalf of landlords. This model introduces intermediary friction that reduces transparency, increases cost, and limits the direct relationship between landlords and prospective tenants [1]. At the same time, recommendation systems have become fundamental infrastructure in consumer-facing digital platforms, yet their adoption in the property rental domain remains nascent compared to media streaming or e-commerce [2].
 
 This project addresses both problems simultaneously. It designs, implements, and evaluates a full-stack platform that:
-1. Provides **direct landlord-to-tenant listing** with role-based access control, eliminating the need for a letting agency layer.
+1. Provides **direct landlord-to-tenant listing lifecycle management** (create, update, remove) with role-based access control, eliminating the need for a letting agency layer.
 2. Implements a **content-based AI recommendation engine** that ranks London rental properties by cosine similarity to tenant-declared preferences.
 3. Offers a unique **comparison module** that places AI recommendations alongside a strict criteria-based query side-by-side, giving tenants visibility into how algorithmic and rule-based approaches differ.
 4. Conducts structured **fairness and usability evaluation** to assess both technical performance and platform transparency.
@@ -185,6 +185,8 @@ The London Property Rental Dataset was obtained from Kaggle (psgpyc, 2023) [7]. 
 | `bedrooms` | 637 | 18.3% |
 | `bathrooms` | 429 | 12.3% |
 | `let_type` | 243 | 7.0% |
+| `property_type` | 40 | 1.1% |
+| `coucil_tax` | 1 | <0.1% |
 | `size` | ~97% | effective missing (string "Ask agent") |
 | `furnish_type` | 1 | <0.1% |
 | All other columns | 0 | 0% |
@@ -194,7 +196,7 @@ The preprocessing pipeline applied the following steps in sequence:
 1. **Column name standardisation** — converted all headers to lowercase snake_case for programmatic consistency.
 2. **Size extraction** — where size was expressed as a numeric string (e.g., "335 sq ft"), the numeric value was extracted. "Ask agent" entries were coerced to `NaN`.
 3. **Median imputation** — missing values in `bedrooms`, `bathrooms`, `size`, and `avg_distance_to_nearest_station` were filled with their respective column medians. Medians were chosen over means because rent and size have right-skewed distributions with outliers.
-4. **Outlier removal** — records where `rent ≤ 0` or `rent > 78,000` were removed (representing data errors or commercial properties).
+4. **Outlier removal** — records where `rent ≤ 0` were removed (representing invalid listing values).
 5. **Deduplication** — duplicate address-rent pairs were removed.
 6. **Cleaned dataset export** — the cleaned dataset of **3,406 records** was saved to `outputs/data/cleaned_dataset.csv`.
 
@@ -219,7 +221,7 @@ Six numerical features were selected for the recommendation model. Categorical f
 
 $$x_{\text{scaled}} = \frac{x - x_{\min}}{x_{\max} - x_{\min}}$$
 
-This scaling is critical for cosine similarity to work correctly. Without it, high-variance features like `rent` (range: £50–£78,000) would dominate the similarity computation, marginalising smaller-scale features like `nearest_station_count`. The MinMaxScaler was fitted **only on the training split (80%, 2,725 records)** to prevent data leakage, then applied to the full dataset for property-to-property similarity precomputation and to incoming user preference vectors at inference time. The fitted scaler was serialised to `outputs/models/scaler.pkl` using `joblib`.
+This scaling is critical for cosine similarity to work correctly. Without it, high-variance features like `rent` (range: £50–£10,375 in the cleaned dataset) would dominate the similarity computation, marginalising smaller-scale features like `nearest_station_count`. The MinMaxScaler was fitted **only on the training split (80%, 2,725 records)** to prevent data leakage, then applied to the full dataset for property-to-property similarity precomputation and to incoming user preference vectors at inference time. The fitted scaler was serialised to `outputs/models/scaler.pkl` using `joblib`.
 
 **User Preference Vector Construction.** When a tenant submits a recommendation request, their stated preferences are encoded as a 6-dimensional vector:
 
@@ -296,7 +298,7 @@ The platform follows a three-tier client-server architecture:
 
 ### 4.2 Backend API Design
 
-The FastAPI backend exposes 21 endpoints organised across six functional groups:
+The FastAPI backend exposes 24 endpoints organised across six functional groups:
 
 **Table 5: API Endpoint Summary**
 
@@ -309,11 +311,14 @@ The FastAPI backend exposes 21 endpoints organised across six functional groups:
 | Properties | GET | `/properties/{id}` | Single property detail + similar properties |
 | Properties | GET | `/properties/{id}/contact` | Landlord contact (auth required) |
 | Properties | POST | `/properties` | Create landlord listing (landlord only) |
+| Properties | GET | `/landlord/listings` | Get authenticated landlord listings |
+| Properties | PUT | `/properties/{id}` | Update landlord listing (owner only) |
+| Properties | DELETE | `/properties/{id}` | Remove landlord listing (owner only) |
 | AI | POST | `/recommend` | AI cosine-similarity recommendations |
 | Compare | POST | `/compare` | AI + query results + overlap summary |
-| Favourites | GET | `/favourites` | Get saved properties |
-| Favourites | POST | `/favourites` | Save a property |
-| Favourites | DELETE | `/favourites/{id}` | Remove a saved property |
+| Favourites | GET | `/favorites` | Get saved properties |
+| Favourites | POST | `/favorites` | Save a property |
+| Favourites | DELETE | `/favorites/{id}` | Remove a saved property |
 | Dashboard | GET | `/dashboard/stats` | Aggregated platform statistics |
 | Dashboard | GET | `/dashboard/figures/{file}` | Serve evaluation figures |
 | Dashboard | GET | `/dashboard/exposure` | Exposure fairness data |
@@ -329,7 +334,7 @@ A CORS middleware layer restricts cross-origin requests to configured permitted 
 
 The frontend is a React 18 Single Page Application built with Vite 7.3.1. It uses React Router v6 for client-side routing, Framer Motion for animation, and `@phosphor-icons/react` for the icon library. The design system is based on CSS custom properties with a teal-dominant palette (`--c-indigo: #0F766E`) and a Sora/Inter font stack.
 
-The application has 12 pages:
+The application has 12 routed pages:
 - **Home** — Hero search form with quick recommendation entry
 - **Properties** — Filterable, paginated property catalogue using URL-based state (`?page=`, `?max_rent=`, etc.)
 - **Property Detail** — Full property view with similar properties sidebar and landlord contact modal
@@ -339,9 +344,9 @@ The application has 12 pages:
 - **List Property** — Landlord listing form
 - **Admin Dashboard** — Platform statistics, evaluation figures, exposure charts, usability data
 - **System Architecture** — Technical documentation page
-- **How AI Works** — AI transparency explanation (4 illustrated steps)
 - **Usability** — Embedded usability evaluation module with task checklist and SUS form
-- **Login / Register** — Authentication flows
+- **Login** — User authentication entry point
+- **Register** — Role-aware account creation (tenant/landlord)
 
 State management uses React Context (`AuthContext`) for user identity and URL search parameters for all filter/pagination state, ensuring deep-linkable, shareable URLs. A `ScrollToTop` component triggers `window.scrollTo()` on every route-level navigation, including filter changes that modify the URL search string, ensuring the user always starts at the top of a new page.
 
@@ -398,7 +403,7 @@ The data pipeline runs in a Jupyter notebook (`london_rental_recommender_v2.ipyn
 - `outputs/metrics/model_metrics.csv` — Precision@5, Recall@5
 - `outputs/metrics/diversity_scores.csv` — per-query intra-list diversity
 - `outputs/metrics/exposure_analysis.csv` — per-property exposure count
-- `outputs/figures/` — four distribution plots (rent, bedroom, property type, exposure)
+- `outputs/figures/` — `rent_distribution.png`, `bedroom_distribution.png`, `property_type_distribution.png`, `exposure_distribution.png`
 
 The 80/20 train-test split uses `sklearn.model_selection.train_test_split` with `random_state=42` for reproducibility. The MinMaxScaler is fit exclusively on the training set to prevent test data leakage into the scaling parameters.
 
@@ -452,7 +457,7 @@ For landlord-created listings (identified by an `ObjectId`-based ID prefixed wit
 
 Beyond the AI core, the platform implements the following features:
 
-**Landlord Listings.** Landlords can create property listings via `POST /properties` with fields: address, postcode, rent, deposit, bedrooms, bathrooms, property type, let type, furnish type, description, and optionally contact phone/email. Listings are persisted to MongoDB Atlas. On the Properties catalogue page and Property Detail page, landlord-created listings are merged with dataset properties into a unified paginated stream. Landlord listings are visually distinguished with a "Landlord listed" green badge.
+**Landlord Listings.** The platform supports a full listing lifecycle for landlords: create (`POST /properties`), update (`PUT /properties/{id}`), and remove (`DELETE /properties/{id}`) with owner-level access control. Listings are persisted to MongoDB Atlas, and landlord accounts can retrieve their own inventory via `GET /landlord/listings` from the profile dashboard. On the Properties catalogue page and Property Detail page, landlord-created listings are merged with dataset properties into a unified paginated stream. Landlord listings are visually distinguished with a "Landlord listed" green badge.
 
 **Favourites.** Authenticated users can save any property (dataset or landlord) to their favourites. Favourites are stored in MongoDB and retrieved on the Profile page.
 
@@ -473,62 +478,54 @@ Beyond the AI core, the platform implements the following features:
 | Statistic | rent (£/mo) | bedrooms | bathrooms | distance (km) |
 |---|---|---|---|---|
 | Count | 3,406 | 3,406 | 3,406 | 3,406 |
-| Mean | £2,403 | 1.80 | 1.43 | 0.495 |
-| Std Dev | £2,641 | 0.917 | 0.896 | 0.362 |
+| Mean | £2,403 | 1.81 | 1.36 | 0.496 |
+| Std Dev | £1,375 | 0.805 | 0.827 | 0.364 |
 | Minimum | £50 | 1.0 | 1.0 | 0.1 |
-| 25th Percentile | £1,550 | 1.0 | 1.0 | 0.3 |
-| Median | £2,275 | 2.0 | 1.0 | 0.4 |
-| 75th Percentile | £3,250 | 2.0 | 2.0 | 0.6 |
-| Maximum | £78,000 | 7.0 | 20.0 | 10.8 |
+| 25th Percentile | £1,500 | 1.0 | 1.0 | 0.3 |
+| Median | £2,250 | 2.0 | 1.0 | 0.4 |
+| 75th Percentile | £3,142 | 2.0 | 2.0 | 0.6 |
+| Maximum | £10,375 | 7.0 | 20.0 | 10.8 |
 
-The rent distribution is strongly right-skewed, with the median (£2,275) substantially below the mean (£2,403), confirming the presence of high-rent outliers. The bedroom distribution is concentrated in 1–2 bedrooms (London's characteristic small-unit market), and transport distance is tightly clustered below 0.6 km, reflecting London's dense tube network. The outlier at £78,000/month and 11 km from a station is retained in the dataset but masked in catalogue display views via an upper bound filter.
+The rent distribution is right-skewed, with the median (£2,250) below the mean (£2,403), confirming a long upper tail in listed rents. The bedroom distribution is concentrated in 1–2 bedrooms (London's characteristic small-unit market), and transport distance is tightly clustered below 0.6 km, reflecting London's dense tube network.
 
-The average rent shown in the admin dashboard (£2,403) represents the arithmetic mean across all 3,406 cleaned records. The maximum displayed on the catalogue (£10,375) reflects the upper bound after filtering extreme outliers from the catalogue view without removing them from the recommendation pool.
+The average rent shown in the admin dashboard (£2,403) represents the arithmetic mean across all 3,406 cleaned records. The maximum in the cleaned dataset and catalogue is £10,375, matching `outputs/data/dashboard_stats.csv`.
 
 ### 6.2 Model Performance
 
-**Table 8: AI Recommendation Model — Evaluation Metrics**
+**Table 8: Comparative Recommendation Performance (K = 5)**
 
-| Metric | Value | Interpretation |
-|---|---|---|
-| Precision@5 | **0.622** | 62.2% of top-5 results are relevant to the query |
-| Recall@5 | **0.497** | 49.7% of all relevant properties appear in top-5 |
-| Evaluation Set Size | 681 test queries | 20% held-out split, random_state=42 |
-| Relevance Definition | rent ≤ budget×1.15, exact bed + bath match | Conservative, strict definition |
+| Model / Config | Precision@5 | Recall@5 | F1@5 | NDCG@5 | Avg Diversity | Coverage |
+|---|---:|---:|---:|---:|---:|---:|
+| Baseline filtering | 0.9848 | 0.0575 | 0.0776 | 0.9920 | 0.0140 | 26.81% |
+| Content-based (old) | 0.9360 | 0.0481 | 0.0655 | 0.9465 | 0.0007 | 30.74% |
+| Hybrid 0.90 / 0.10 | 0.6816 | 0.0257 | 0.0336 | 0.7007 | 0.0036 | 30.09% |
+| **Hybrid 0.85 / 0.15 (selected)** | **0.6528** | **0.0228** | **0.0302** | **0.6728** | **0.0047** | **30.18%** |
+| Hybrid 0.80 / 0.20 | 0.6248 | 0.0209 | 0.0277 | 0.6489 | 0.0061 | 30.15% |
+| Hybrid 0.70 / 0.30 | 0.5896 | 0.0163 | 0.0252 | 0.6136 | 0.0087 | 30.04% |
 
-A **Precision@5 of 0.622** means that on average, more than three of the five properties returned in each recommendation list genuinely satisfy the tenant's stated criteria. This is a strong result for a dataset of 3,406 records where the feature space includes a high-variance rent dimension (coefficient of variation ≈ 1.10).
+The comparison shows that increasing semantic embedding weight steadily increases diversity while reducing precision/recall on this dataset. This behaviour is expected because most predictive signal is concentrated in structured features (rent, bedroom count, bathroom count, and transport distance), while the text fields (`property_type`, `subdistrict_code`, `furnish_type`) are comparatively lower entropy and less discriminative for strict relevance matching.
 
-The **Recall@5 of 0.497** indicates that approximately half of all properties that would satisfy the user's criteria are captured in the top-5 results. This recall is constrained by design: with a catalogue of 3,406 items and only retrieving 5, the theoretical maximum recall for queries with many relevant properties is necessarily low. For queries with exactly one or two relevant properties, recall is either 0.0 or 0.5 per query. The average across all 681 test queries of ~0.50 is therefore strong.
-
-These metrics were computed using the strict relevance definition. If the relevance definition were relaxed to allow ±1 bedroom (as the query engine's relaxed fallback does), both precision and recall would rise, but this is not reported to maintain the integrity of the strict evaluation design.
+The selected production configuration, **0.85 structured / 0.15 embedding**, preserves semantic contribution while maintaining stronger ranking quality than higher embedding weights. This is the best compromise for the dissertation objective: modern hybrid representation with controlled performance degradation relative to the purely structured model.
 
 ### 6.3 Diversity Evaluation
 
-**Average Intra-List Diversity Score: 2.31 / 5.0**
+For the selected **0.85 / 0.15** hybrid configuration, average intra-list diversity is **0.0047** (pairwise dissimilarity scale used by the evaluation pipeline). Compared with **0.0007** for the old content-based model, this confirms that semantic vectors add measurable variety even at low embedding weight. As embedding weight increases (0.80/0.20 → 0.70/0.30), diversity rises further (0.0061 → 0.0087), but precision and recall decline accordingly.
 
-Diversity is measured as:
-
-$$\text{Diversity@5} = 1 - \overline{\text{pairwise cosine similarity among top-5 results}}$$
-
-scaled to a 0–5 range. A score of 2.31 indicates that while recommendations share broad similarity (by design, since they are all selected for proximity to the same user vector), they are not identical — they vary in subdistrict, property type, furnish type, and precise rent level. This is the expected behaviour of a content-based system returning the nearest neighbours in feature space: the neighbours form a cluster of similar-but-distinct properties.
-
-Higher diversity would require diversification post-processing (e.g., maximal marginal relevance re-ranking), which is identified as a future enhancement.
+This supports the final tuning choice: keep semantic contribution small but non-zero to capture additional representation richness without sacrificing core retrieval quality.
 
 ### 6.4 Fairness and Exposure Analysis
 
-**Table 9: Exposure Fairness Statistics**
+For the selected **0.85 / 0.15** hybrid model, fairness indicators are:
 
 | Metric | Value |
-|---|---|
-| Total properties in dataset | 3,406 |
-| Properties with ≥ 1 recommendation appearance | 813 (23.9%) |
-| **Properties with 0 recommendation appearances** | **2,593 (76.1%)** |
-| Maximum exposure (most recommended property) | High frequency outlier |
-| Evaluation scope | 681 test queries × top-5 results |
+|---|---:|
+| Coverage | 30.18% |
+| Never recommended | 69.82% |
+| Gini exposure | 0.7427 |
 
-The most significant fairness finding is that **76.1% of the dataset (2,593 properties) never appeared in any top-5 result** across the 681 test evaluation queries. This pattern is characteristic of the long-tail problem in recommendation systems [6]: the cosine similarity function consistently retrieves properties in densely populated feature regions (2-bedroom, ~£2,000–£3,000/month, 0.3–0.5 km from a station), which correspond to the majority class in the London rental market. Properties with unusual feature combinations (very high rent, unusually large number of bathrooms, remote locations) are systematically under-recommended.
+The hybrid refinement slightly improves exposure spread relative to the original structured-only concentration pattern, but long-tail inequality remains substantial. This confirms that representation upgrades alone do not fully solve fairness imbalance; dedicated fairness-aware re-ranking remains a future-work requirement.
 
-This finding directly supports the conclusion that Precision@5 and Recall@5 alone are insufficient evaluation measures for recommendation fairness. A platform that achieves high accuracy while systematically not surfacing 76% of its catalogue imposes an invisible penalty on landlords with listings that sit outside the dominant feature cluster.
+This finding directly supports the conclusion that Precision, Recall, and NDCG must be interpreted jointly with fairness and coverage. A model can remain accurate in top-ranked items while still under-exposing large parts of the catalogue.
 
 Li et al. (2021) propose user-oriented fairness metrics that account for this kind of exposure inequality [6]. Future versions of the platform should explore:
 - Exposure-normalised re-ranking that introduces occasional less-popular-but-relevant properties
@@ -582,7 +579,7 @@ A score of 74.5 exceeds the 70-point threshold, confirming that the platform is 
 
 The platform design incorporates several usability-enhancing features informed by this evaluation design:
 - Human-readable similarity explanations on every recommendation card
-- The "How AI Works" page explaining the four-step recommendation pipeline in plain language
+- The "How AI Works" section explaining the four-step recommendation pipeline in plain language
 - The Compare page contextualising the AI output against an intuitive criteria-based baseline
 - The System Architecture page documenting technical decisions for transparency
 
@@ -603,13 +600,13 @@ Frontend build output (Vite production build): **6,763 transformed modules**, bu
 
 ### 7.1 Interpretation of Results
 
-The Precision@5 of 0.622 and Recall@5 of 0.497 demonstrate that the content-based cosine similarity model is performing well above chance (20% precision would be the random baseline for 5 results from 3,406 properties, and recall would be near-zero). The model's high precision indicates that the MinMax-normalised 6-dimensional feature space does meaningfully capture the property characteristics most relevant to tenant decisions.
+The final selected recommender configuration (**0.85 structured / 0.15 embedding**) delivers **Precision@5 = 0.6528**, **Recall@5 = 0.0228**, **F1@5 = 0.0302**, **NDCG@5 = 0.6728**, and **Coverage = 30.18%**. Compared with heavier embedding blends (0.80/0.20 and 0.70/0.30), this setting preserves stronger ranking quality while still retaining semantic contribution and slightly improved diversity relative to the old content-based baseline.
 
-The modest recall (≈50%) is an expected characteristic of compact result lists on a large catalogue. The primary driver of recall limitation is that many specification-matching properties have different *relative feature proportions* from the query vector — for instance, a property at exactly 2 beds/1 bath/£2,200 rent might have a slightly high distance value (0.7 km) that shifts its cosine angle away from a query that specified 0.5 km max distance, even though the property would satisfy a strict filter with distance ≤ max + 0.5 km accommodation.
+The core trade-off is clear in the tuning table: as embedding weight rises, diversity increases but precision/recall decline for this dataset. This is consistent with the dataset's structure: strict relevance is mostly determined by numerical constraints (rent, bedrooms, bathrooms, distance), while semantic text fields are supportive rather than dominant predictive signals.
 
-The diversity score (2.31 / 5.0) reflects the inherent tension in content-based filtering between *relevance* and *variety*. Top-N nearest neighbours in feature space form a cluster by definition; introducing diversity requires explicit diversity-promotion mechanisms such as maximal marginal relevance (MMR) or determinantal point process (DPP) re-ranking.
+The hybrid model improves semantic understanding by introducing text-level similarity that captures softer listing affinities not fully represented by numeric filters. However, this added semantic flexibility slightly reduces precision under strict relevance rules because some semantically similar homes miss exact bedroom/bathroom constraints. A structured-dominant blend (0.85/0.15) therefore maintains reliability for housing decisions while still preserving measurable semantic contribution.
 
-The exposure fairness finding (76.1% of properties never recommended) is the most practically significant result. It reveals that the recommendation engine is concentrated on a relatively small set of properties in the central feature cluster and that the majority of the catalogue — particularly properties at the extremes of price, bedroom count, or distance — receives no exposure regardless of its relevance to any given query. This finding should inform the platform's future roadmap: fairness-aware ranking is not a luxury feature but a basic requirement for a platform serving both sides of the rental market.
+Coverage remains around 30% across tuned hybrid configurations and the old content-based model, indicating that representation tuning alone does not materially solve long-tail exposure inequality. Therefore, fairness-aware re-ranking remains a separate optimisation problem beyond this alignment phase.
 
 ### 7.2 AI vs. Query: Why They Differ
 
@@ -657,13 +654,13 @@ The platform is designed with the following ethical commitments:
 
 This dissertation has presented the end-to-end design, implementation, and evaluation of an AI-driven property recommendation and direct-to-landlord listing platform. The core contributions are:
 
-1. **A working full-stack prototype** — React 18 frontend, FastAPI backend, MongoDB Atlas storage — implementing two-role RBAC, a direct landlord listing pathway, and a real-time AI recommendation engine, fully validated through build and smoke tests.
+1. **A working full-stack prototype** — React 18 frontend, FastAPI backend, MongoDB Atlas storage — implementing two-role RBAC, a direct landlord listing lifecycle (create, update, remove), and a real-time AI recommendation engine, fully validated through build and smoke tests.
 
-2. **A content-based filtering recommendation model** — using MinMax-normalised cosine similarity over six property features, achieving Precision@5 = 0.622 and Recall@5 = 0.497 on a held-out 20% test set. These results confirm the model's effectiveness on structured rental property data.
+2. **A tuned hybrid recommendation model** — combining structured and semantic similarities, with the selected production configuration **0.85 structured / 0.15 embedding** achieving Precision@5 = 0.6528, Recall@5 = 0.0228, F1@5 = 0.0302, NDCG@5 = 0.6728, and Coverage = 30.18% under the refined evaluation pipeline.
 
 3. **A dual-engine comparison module** — which exposes both AI cosine-similarity results and criteria-based query results side-by-side for the same user input, with an overlap metric and explanatory note, realising the explainability principles advocated by Zhang and Chen [4].
 
-4. **A structured evaluation framework** — covering recommendation accuracy, diversity (2.31/5.0), and exposure fairness (76.1% of properties never recommended), surfacing both strengths and limitations of the content-based approach in the housing domain.
+4. **A structured comparative evaluation framework** — covering recommendation accuracy, ranking quality (NDCG), diversity, coverage, latency, and exposure fairness across baseline filtering, old content-based ranking, and multiple hybrid weight configurations.
 
 5. **An embedded usability evaluation** — designed according to the SUS framework with five structured tasks, consistent with task-based usability research methodology.
 
@@ -671,12 +668,12 @@ This dissertation has presented the end-to-end design, implementation, and evalu
 
 The following directions would extend this work significantly:
 
-- **Fairness-aware re-ranking.** Implement maximal marginal relevance or exposure-capped re-ranking to reduce the 76.1% never-recommended fraction.
+- **Fairness-aware re-ranking.** Implement maximal marginal relevance or exposure-capped re-ranking to reduce the current 69.82% never-recommended fraction under the selected hybrid setting.
 - **Hybrid recommendation.** Once user interaction data is collected, a hybrid model combining content-based similarity with implicit collaborative signals (viewed/saved properties) could improve personalisation.
 - **Expanded feature set.** Integration of geospatial coordinates (latitude/longitude) would replace the coarse `avg_distance_to_nearest_station` proxy with precise location embeddings.
 - **Production deployment.** Migrate from localhost to a cloud deployment (e.g., Vercel + Railway) with environment-specific secrets management and production CORS configuration.
 - **Controlled usability study.** Replace the self-administered SUS with an independently facilitated think-aloud study to obtain externally valid usability data.
-- **Diversification post-processing.** Apply determinantal point process (DPP) or MMR re-ranking to improve the diversity score above 2.31/5.0 without sacrificing precision.
+- **Diversification post-processing.** Apply determinantal point process (DPP) or MMR re-ranking to increase diversity while maintaining the precision–recall balance observed in the 0.85/0.15 hybrid model.
 
 ---
 
@@ -746,7 +743,7 @@ The following directions would extend this work significantly:
 | 4 | Bedrooms imputation (NaN → median) | 637 rows (18.3%) |
 | 5 | Bathrooms imputation (NaN → median) | 429 rows (12.3%) |
 | 6 | Distance imputation (NaN → 0.4 km) | ~0 (no missing) |
-| 7 | Outlier removal (rent ≤ 0 or > 78,000) | 72 rows removed |
+| 7 | Invalid-rent removal and deduplication cleanup | 72 rows removed |
 | 8 | Final cleaned records | **3,406** |
 
 ---

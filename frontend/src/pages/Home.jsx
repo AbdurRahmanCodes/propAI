@@ -73,8 +73,8 @@ export default function HomePage() {
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }} className="metric-strip">
                 {[
                   { val: '3,406', sub: 'properties' },
-                  { val: '0.622', sub: 'precision@5' },
-                  { val: '2.31', sub: 'diversity score' },
+                  { val: '0.6528', sub: 'precision@5' },
+                  { val: '30.18%', sub: 'coverage' },
                   { val: '6', sub: 'matching features' },
                 ].map((item) => (
                   <div key={item.sub} className="metric-tile">
@@ -189,7 +189,7 @@ export default function HomePage() {
               {[
                 { icon: Star, title: 'Transparent AI', desc: 'Every recommendation comes with a match score and precise explanation of why each property was chosen.' },
                 { icon: StackSimple, title: 'Research-grade evidence', desc: 'The platform exposes evaluation metrics and method comparison instead of presenting AI as a black box.' },
-                { icon: ChartLineUp, title: 'Content-based filtering', desc: 'The recommendation engine works without historical user behaviour and stays aligned to property features.' },
+                { icon: ChartLineUp, title: 'Hybrid ranking model', desc: 'The engine blends structured similarity with semantic embeddings for balanced, explainable results.' },
               ].map(({ icon: Icon, title, desc }, i) => (
                 <div key={i} style={{ padding: '40px 36px', background: 'var(--c-surface)', borderRight: i < 2 ? '1px solid var(--c-border)' : 'none' }}>
                   <div style={{ width: 44, height: 44, borderRadius: 12, background: 'var(--c-indigo-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>

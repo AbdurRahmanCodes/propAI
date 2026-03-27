@@ -14,19 +14,19 @@ export default function ListProperty() {
   const { user } = useAuth()
   const navigate = useNavigate()
 
-  if (!user) return <Navigate to="/login" />
-  if (user.role !== 'landlord') return <Navigate to="/" />
-
   const [form, setForm] = useState({
     address: '', rent: '', deposit: '',
     bedrooms: 1, bathrooms: 1,
     property_type: 'Apartment', furnish_type: 'Unfurnished',
     let_type: 'Long term', avg_distance_to_nearest_station: '',
-    description: '', contact_email: user.email || '', contact_phone: '',
+    description: '', contact_email: user?.email || '', contact_phone: '',
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
+
+  if (!user) return <Navigate to="/login" />
+  if (user.role !== 'landlord') return <Navigate to="/" />
 
   const set = (k) => (e) => setForm(f => ({ ...f, [k]: e.target.value }))
 
@@ -54,7 +54,7 @@ export default function ListProperty() {
           <PlusCircle size={28} color="#10B981" />
         </div>
         <h2 className="heading-2" style={{ marginBottom: 6 }}>Listing Created!</h2>
-        <p style={{ fontSize: '0.875rem', color: 'var(--c-text-3)' }}>Your property has been listed. Redirecting to properties...</p>
+        <p style={{ fontSize: '0.875rem', color: 'var(--c-text-3)' }}>Your property has been listed. You can update or remove it later from Profile. Redirecting to properties...</p>
       </div>
     </div>
   )
@@ -77,7 +77,7 @@ export default function ListProperty() {
                 <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#D1FAE5' }}>Landlord account: {user.username}</span>
               </div>
               <div className="flow-note">
-                Listings created here remain first-class property records in the platform and can expose direct contact information on the detail page.
+                Listings created here remain first-class property records in the platform, can expose direct contact information, and can now be updated or removed from your profile dashboard.
               </div>
             </div>
           </div>

@@ -100,6 +100,21 @@ class ListingCreate(BaseModel):
     contact_phone: Optional[str] = None
 
 
+class ListingUpdate(BaseModel):
+    address: Optional[str] = None
+    rent: Optional[float] = Field(default=None, gt=0)
+    deposit: Optional[float] = None
+    bedrooms: Optional[int] = Field(default=None, ge=1, le=10)
+    bathrooms: Optional[int] = Field(default=None, ge=1, le=10)
+    property_type: Optional[str] = None
+    furnish_type: Optional[str] = None
+    let_type: Optional[str] = None
+    avg_distance_to_nearest_station: Optional[float] = None
+    description: Optional[str] = None
+    contact_email: Optional[str] = None
+    contact_phone: Optional[str] = None
+
+
 # ─── Dashboard ───────────────────────────────────────────────────────────────
 
 class DashboardStats(BaseModel):

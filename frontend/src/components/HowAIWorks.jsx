@@ -53,7 +53,7 @@ export default function HowAIWorks() {
             How the recommendation engine works
           </h2>
           <p className="body-lg" style={{ maxWidth: 520, margin: '0 auto' }}>
-            Content-based filtering powered by cosine similarity — no black box, no guessing.
+            A hybrid of structured similarity and semantic embeddings — transparent scoring without black-box behaviour.
           </p>
         </motion.div>
 
@@ -135,7 +135,7 @@ export default function HowAIWorks() {
           style={{ marginTop: 20, textAlign: 'center' }}
         >
           <p style={{ fontSize: '0.8125rem', color: 'var(--c-text-4)' }}>
-            6 features · MinMaxScaler normalisation · Precision@5 = 0.622 · 3,406 London properties
+            6 features · MinMaxScaler normalisation · Precision@5 = 0.6528 · 3,406 London properties
           </p>
         </motion.div>
       </div>

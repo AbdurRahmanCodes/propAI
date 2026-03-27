@@ -5,9 +5,10 @@ Falls back to in-memory mode if MONGODB_URI is not set or Atlas is unreachable.
 
 import os
 import asyncio
-from typing import Optional
+from typing import Optional, Any
 from datetime import datetime
 from dotenv import load_dotenv
+from pymongo import ReturnDocument
 
 try:
     from bson import ObjectId
@@ -19,8 +20,8 @@ load_dotenv()
 MONGODB_URI = os.getenv("MONGODB_URI", "")
 DB_NAME = os.getenv("DB_NAME", "propai")
 
-_client = None
-_db = None
+_client: Any = None
+_db: Any = None
 _mongo_available = False
 
 # ── In-memory fallback (identical API surface) ──────────────────────────────
@@ -148,14 +149,16 @@ async def create_listing(listing: dict) -> dict:
     return listing
 
 
-async def get_landlord_listings(skip: int = 0, limit: int = 20) -> tuple[list, int]:
+async def get_landlord_listings(skip: int = 0, limit: int = 20, landlord: Optional[str] = None) -> tuple[list, int]:
+    query = {"landlord": landlord} if landlord else {}
     if _mongo_available:
-        total = await _db.listings.count_documents({})
-        cursor = _db.listings.find({}).skip(skip).limit(limit).sort("created_at", -1)
+        total = await _db.listings.count_documents(query)
+        cursor = _db.listings.find(query).skip(skip).limit(limit).sort("created_at", -1)
         docs = [_norm_doc(d) async for d in cursor]
         return docs, total
-    paged = _mem_listings[skip: skip + limit]
-    return paged, len(_mem_listings)
+    listings = [l for l in _mem_listings if not landlord or l.get("landlord") == landlord]
+    paged = listings[skip: skip + limit]
+    return paged, len(listings)
 
 
 async def get_listing_by_id(listing_id: str) -> Optional[dict]:
@@ -172,6 +175,57 @@ async def get_listing_by_id(listing_id: str) -> Optional[dict]:
         if str(listing.get("_id")) == str(listing_id):
             return listing
     return None
+
+
+async def update_listing_by_owner(listing_id: str, landlord: str, updates: dict) -> Optional[dict]:
+    updates = {k: v for k, v in updates.items() if v is not None}
+    if not updates:
+        return await get_listing_by_id(listing_id)
+
+    updates["updated_at"] = datetime.utcnow().isoformat()
+
+    if _mongo_available:
+        base_query = {"landlord": landlord}
+        if ObjectId is not None:
+            try:
+                query = {**base_query, "_id": ObjectId(str(listing_id))}
+            except Exception:
+                query = {**base_query, "_id": listing_id}
+        else:
+            query = {**base_query, "_id": listing_id}
+
+        result = await _db.listings.find_one_and_update(
+            query,
+            {"$set": updates},
+            return_document=ReturnDocument.AFTER,
+        )
+        return _norm_doc(result) if result else None
+
+    for listing in _mem_listings:
+        if str(listing.get("_id")) == str(listing_id) and listing.get("landlord") == landlord:
+            listing.update(updates)
+            return listing
+    return None
+
+
+async def delete_listing_by_owner(listing_id: str, landlord: str) -> bool:
+    if _mongo_available:
+        base_query = {"landlord": landlord}
+        if ObjectId is not None:
+            try:
+                query = {**base_query, "_id": ObjectId(str(listing_id))}
+            except Exception:
+                query = {**base_query, "_id": listing_id}
+        else:
+            query = {**base_query, "_id": listing_id}
+        result = await _db.listings.delete_one(query)
+        return result.deleted_count > 0
+
+    for i, listing in enumerate(_mem_listings):
+        if str(listing.get("_id")) == str(listing_id) and listing.get("landlord") == landlord:
+            _mem_listings.pop(i)
+            return True
+    return False
 
 
 def get_storage_mode() -> str:
