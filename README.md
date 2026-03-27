@@ -1,3 +1,13 @@
+---
+title: PropAI Rental Recommender
+emoji: 🏠
+colorFrom: blue
+colorTo: green
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # UK Property Listing Platform
 
 AI-driven rental property platform with direct landlord-to-tenant workflows, recommendation ranking, and side-by-side AI vs query comparison.
