@@ -1,9 +1,10 @@
 import axios from 'axios'
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
+const RAW_API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').trim()
+const API_BASE_URL = RAW_API_BASE_URL.replace(/\/$/, '')
 
 const API = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: API_BASE_URL || '/',
   timeout: 30000,
 })
 
@@ -46,7 +47,7 @@ export const getExposureData     = ()           => API.get('/dashboard/exposure'
 export const getPerformanceSummary = ()         => API.get('/dashboard/performance')
 export const getJourneySummary   = ()           => API.get('/journey/summary')
 export const getMyJourneySummary = ()           => API.get('/journey/me')
-export const getFigureUrl        = (filename)   => `${API_BASE_URL}/dashboard/figures/${filename}`
+export const getFigureUrl        = (filename)   => `${API_BASE_URL || ''}/dashboard/figures/${filename}`
 
 // ── Usability ──────────────────────────────────────────────────────────────
 export const logUsability       = (data) => API.post('/usability/log', data)
